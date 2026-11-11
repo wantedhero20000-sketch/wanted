@@ -1,5 +1,7 @@
 // ═══════════════════════════════════════════════════════════════
-// خدمة دمج الفيديو — Video Merger API v2 (بلا مفاتيح أو توثيق)
+// خدمة دمج الفيديو — Video Merger API v2
+// تدعم خدمة عامة بلا توثيق، أو خدمة خاصة محمية بمفتاح عبر
+// متغير البيئة MERGER_API_TOKEN (يُرسل كترويسة X-API-Key).
 // المخرجات: MP4 (H.264 + AAC) حتى 1080p بجودة CRF 18 — لا resolution/fps (الناتج ثابت).
 // القيود: 10 مقاطع كحد أقصى، 200MB لكل مصدر، 150MB للناتج، 600 ثانية مجموع المدد،
 // وكل الملفات تُحذف تلقائيًا بعد 24 ساعة.
@@ -21,6 +23,12 @@ export function mergerBase(): string {
 /** هل الخدمة مهيأة فعلاً؟ (العنوان الافتراضي placeholder وليس خدمة حقيقية) */
 export function mergerConfigured(): boolean {
   return /^https?:\/\//.test(mergerBase()) && !mergerBase().includes("xxxxxxxx");
+}
+
+/** ترويسة توثيق اختيارية لخدمة الدمج الخاصة (MERGER_API_TOKEN → X-API-Key) */
+function mergerHeaders(): Record<string, string> {
+  const token = (process.env.MERGER_API_TOKEN || "").trim();
+  return token ? { "x-api-key": token } : {};
 }
 
 // قفل الذاكرة: مهمات الدمج التي يُنفَّذ process لها حاليًا/سبق له اكتماله بنجاح
@@ -47,7 +55,11 @@ async function call(path: string, init?: RequestInit & { timeoutMs?: number }): 
   const { timeoutMs = 15_000, ...rest } = init ?? {};
   let res: Response;
   try {
-    res = await fetch(mergerBase() + path, { ...rest, signal: AbortSignal.timeout(timeoutMs) });
+    res = await fetch(mergerBase() + path, {
+      ...rest,
+      headers: { ...mergerHeaders(), ...((rest.headers as Record<string, string>) || {}) },
+      signal: AbortSignal.timeout(timeoutMs),
+    });
   } catch (e) {
     // خطأ شبكتنا — يُعامل كمؤقت (status 0) ولا ينهي المهمة
     throw new Error(`NETWORK:${e instanceof Error ? e.message : String(e)}`);
